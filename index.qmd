@@ -1,0 +1,17 @@
+---
+title: "ABOUT ME"
+---
+
+**I am a Graduate student at Zicklin school of Business, pursuing MS in AI and Business Analytics. I've over 4 years experience under Supply Chain operations management largely focusing on International logistics, Freight forwarding and Procurement.**
+
+![](Dhruv.Rajpal.jpg)
+
+[Profile](https://drive.google.com/file/d/1I3RsK1cFI_XKAVJEP-F7cGSI1D7tAnqS/view?usp=sharing)
+
+
+```{r}
+#| include: false
+1+1
+```
+--------------
+Last Updated: `r format(Sys.time(), "%A %m %d, %Y at %H:%M%p")`
