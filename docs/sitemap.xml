@@ -1,23 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://github.com/dhruvrajpal2608/STA9750-2026-FALL/index.html</loc>
-    <lastmod>2026-09-16T13:09:37.037Z</lastmod>
-  </url>
-  <url>
-    <loc>https://github.com/dhruvrajpal2608/STA9750-2026-FALL/mp01.html</loc>
-    <lastmod>2026-09-16T13:12:34.215Z</lastmod>
-  </url>
-  <url>
-    <loc>https://github.com/dhruvrajpal2608/STA9750-2026-FALL/mp02.html</loc>
-    <lastmod>2026-09-16T13:12:47.200Z</lastmod>
-  </url>
-  <url>
-    <loc>https://github.com/dhruvrajpal2608/STA9750-2026-FALL/mp03.html</loc>
-    <lastmod>2026-09-16T13:12:50.505Z</lastmod>
+    <loc>https://github.com/dhruvrajpal2608/STA9750-2026-FALL/test.html</loc>
+    <lastmod>2026-10-11T16:46:15.026Z</lastmod>
   </url>
   <url>
     <loc>https://github.com/dhruvrajpal2608/STA9750-2026-FALL/mp04.html</loc>
-    <lastmod>2026-09-16T13:12:52.988Z</lastmod>
+    <lastmod>2026-10-11T18:40:53.651Z</lastmod>
+  </url>
+  <url>
+    <loc>https://github.com/dhruvrajpal2608/STA9750-2026-FALL/mp02.html</loc>
+    <lastmod>2026-10-11T18:40:53.647Z</lastmod>
+  </url>
+  <url>
+    <loc>https://github.com/dhruvrajpal2608/STA9750-2026-FALL/index.html</loc>
+    <lastmod>2026-10-11T18:40:53.713Z</lastmod>
+  </url>
+  <url>
+    <loc>https://github.com/dhruvrajpal2608/STA9750-2026-FALL/mp01.html</loc>
+    <lastmod>2026-10-11T19:11:39.697Z</lastmod>
+  </url>
+  <url>
+    <loc>https://github.com/dhruvrajpal2608/STA9750-2026-FALL/mp03.html</loc>
+    <lastmod>2026-10-11T18:40:53.651Z</lastmod>
+  </url>
+  <url>
+    <loc>https://github.com/dhruvrajpal2608/STA9750-2026-FALL/MPP.html</loc>
+    <lastmod>2026-10-05T02:58:50.762Z</lastmod>
   </url>
 </urlset>

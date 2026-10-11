@@ -1,10 +1,9 @@
 
-  ---
-  Title: Netflix User Engagement Analysis
-  ---
+#  **Netflix User Engagement Analysis**
   
   
-# **1. Data Acquisition**
+## 1,2. Data Acquisition & Recreating the Columns
+
 
 For Data acquisition from the Netflix server, below script can be executed to load the data *from 2023 to 1st half of 2026* with 7 CSV files, in the local environment with a more personalized approach to benefit the **Data manipulation and EDA**. 
 
@@ -94,7 +93,7 @@ NETFLIX_DATA <- load_netflix_data()
 ```
   
 
-# **3. Fixing Facts**
+## 3. Fixing Facts
 
 Using `mutate()` function, need to fix the 'year' and 'available_globally' columns to covert the data types for both columns.           
       
@@ -106,7 +105,7 @@ NETFLIX_DATA <- NETFLIX_DATA |>
       available_globally = available_globally == 'Yes')
 ```
 
-# **4. Exploratory Data Analysis**
+##4. Exploratory Data Analysis
 To ensure Data consistency across your dataset, perform few validation checks using the below functions to get a summary of each column **metadata** and the first few observations.
 
 ```{r}
@@ -128,7 +127,7 @@ skim(NETFLIX_DATA)
 ## USP
 By performing the above functions on our Netflix viewership dataset, analysts can find out the viewers engagement time on the platform by considering operational metrics like average for views, hours_viewed and runtime.
 
-# **5. Exploratory Questions**
+## 5. Exploratory Questions
 * What date range is covered by this data set?
 We can compute the Date range for the dataset by looking at the *period_start* and *period_end* column.
 
@@ -184,7 +183,7 @@ h1_2026 <- NETFLIX_DATA |>
 h1_2026
 
 ```
-# ** 6. Tabular Analysis**
+## 6. Tabular Analysis
 
 * What was the top title (by total hours viewed) in each period and what fraction of total viewership did it capture?
 To compute the Top Title for every period and its share in total watch-time, we calculated the fraction by dividing the content watch_time with the total hours viewed for every period.
@@ -337,7 +336,7 @@ top_tier_comp
 
 ```
 
-# Corporate Strategy Memo
+## Corporate Strategy Memo
 
 **To:** Netflix Executive Leadership
 **FROM:** Dhruv Rajpal (Business Analyst)
@@ -358,7 +357,7 @@ To maximize ROI on 2027 production budgets, I recommend allocating development c
 
 5. Investment on better recommendation engines with Machine Learning Algorithms.
 
-##Key Empirical Findings
+## Key Empirical Findings
 
 
 1. Series vs. Feature Films: Hours vs. Reach
@@ -386,6 +385,8 @@ Elevated Floor: Because live events are curated tentpoles, the average live even
 Peak Volume Trade-off: Top-tier live events peak between 20M and 65M hours, compared to 500M+ hours for premier episodic dramas like Bridgerton or Stranger Things. Live events drive acute sign-up bursts and cultural buzz, while pre-taped series build sustained, multi-year asset value
 
 ```{r}
+#| label: Strategic portfolio
+#| echo: false
 
 #| label: Strategic-portfolio
 #| echo: false
@@ -452,25 +453,25 @@ p_concentration <- ggplot(df_concentration, aes(x = tier, y = share, fill = tier
 p_format + p_concentration
 ```
 
-##Strategic Recommendations for 2027 and Beyond
+## Strategic Recommendations for 2027 and Beyond
 
-Rebalance the Slate Toward Returnable, Multi-Season TV (70/30 Budget Split):
+Re balance the Slate Toward Returnable, Multi-Season TV (70/30 Budget Split):
 
 Re-allocate film acquisition budgets toward developing recurring multi-season mid-budget procedural dramas and light comedies. Given that television generates ~72% of platform watch time, standalone $150M+ action films provide limited long-term retention compared to an established episodic universe.
 
 **De-escalate Megahit Spending; Invest in Catalog Anchors:**
 
-Because the Top 10 accounts for ~3% of platform hours, no individual mega-budget release can sustain user engagement alone. Redirect development funds toward acquiring and commissioning multi-year "comfort food" series (such as unscripted docuseries, workplace dramedies, and kids/family animation) that maintain viewership floors above 15M hours across every reporting window.
+Because the Top 10 accounts for ~3% of platform hours, no individual mega-budget release can sustain user engagement alone. Redirect development funds toward acquiring and commissioning multi-year "comfort food" series (such as unscripted documentaries, workplace dromedaries, and kids/family animation) that maintain viewership floors above 15M hours across every reporting window.
 
 **Deploy Live Events Strategically as Churn Breakers, Not Runtime Engines:**
 
 Treat live sports, comedy specials, and reunions as customer-acquisition spikes rather than total watch-time drivers. Schedule live broadcasts strategically at the beginning of billing cycles to precede major season releases of high-engagement scripted dramas.
 
-##Conclusion
+## Conclusion
 
 Our competitive advantage in 2027 will not come from outspending rivals on high-risk, single-weekend blockbusters. By leveraging OTT series for baseline engagement and deploying high-impact live events for subscriber acquisition, Netflix can expand operating margins while reinforcing viewer retention.
 
-# **Gini Analysis**
+## Gini Analysis
 
 ```{r}
 #| label: Gini Analysis
