@@ -1,5 +1,5 @@
 ---
-title: "ABOUT ME"
+title: "Introduction"
 ---
 
 **I am a Graduate student at Zicklin school of Business, pursuing MS in AI and Business Analytics. I've over 4 years experience under Supply Chain operations management largely focusing on International logistics, Freight forwarding and Procurement.**
