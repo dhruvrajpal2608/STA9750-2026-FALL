@@ -17,9 +17,6 @@ website:
         contents:
           - href: mp01.qmd
             text: 'MP01: Netflix Engagement Report'
-          
- 
-    
 format:
   html:
     theme: flatly
