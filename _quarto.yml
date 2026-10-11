@@ -7,12 +7,6 @@ website:
   description:
     Course Projects for STA 9750 at Baruch College
   site-url: "https://github.com/dhruvrajpal2608/STA9750-2026-FALL/"
-  chapters:
-    > index.qmd
-    > mp01.qmd
-    > mp02.qmd
-    > mp03.qmd
-    > mp04.qmd
   navbar:
     background: primary
     search: false
