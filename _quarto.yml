@@ -20,6 +20,7 @@ website:
 format:
   html:
     theme: flatly
+    navbar: 
     toc: true
 
 editor:
