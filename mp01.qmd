@@ -490,7 +490,7 @@ plot(
 ```
 # **AI Usage**
 ::: {.callout-note title="AI Usage Statement" collapse="true"}
-Google Gemini was used to help me write the code for EDA. Also, generative AI was used to brainstorm Ideas.
+Google Gemini was used to help write the code for EDA. Also, generative AI was used to brainstorm Ideas.
 
 
 
