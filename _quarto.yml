@@ -18,11 +18,11 @@ website:
           - href: mp01.qmd
             text: 'MP01: Netflix Engagement Report'
           - href: mp02.qmd
-            text: US Public Transit Systems
+            text: 'MP02: US Public Transit Systems'
+            
 format:
   html:
     theme: flatly
-    navbar: 
     toc: true
 
 editor:
