@@ -1,7 +1,8 @@
+---
+title:  "Netflix User Engagement Analysis"
+code-fold: true
+---
 
-#  **Netflix User Engagement Analysis**
-  
-  
 ## 1,2. Data Acquisition & Recreating the Columns
 
 
@@ -105,7 +106,7 @@ NETFLIX_DATA <- NETFLIX_DATA |>
       available_globally = available_globally == 'Yes')
 ```
 
-##4. Exploratory Data Analysis
+## 4. Exploratory Data Analysis
 To ensure Data consistency across your dataset, perform few validation checks using the below functions to get a summary of each column **metadata** and the first few observations.
 
 ```{r}
