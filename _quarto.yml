@@ -19,6 +19,8 @@ website:
             text: 'MP01: Netflix Engagement Report'
           - href: mp02.qmd
             text: 'MP02: US Public Transit Systems'
+          - href: mp03.qmd
+          - href: mp04.qmd
             
 format:
   html:
