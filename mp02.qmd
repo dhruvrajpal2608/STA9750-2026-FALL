@@ -213,6 +213,7 @@ NTD_SERVICE <- load_ntd_service()
 
 ```{r}
 #| code-fold: true
+#| include: false
 
 
 n_modes <- NTD_ENERGY |>
@@ -257,7 +258,9 @@ recode <- bind_cols(
   mode_name = unique(NTD_ENERGY$Mode)
 ) 
 
-recode
+library(gt)
+
+gt(recode)
 ```
 
 
@@ -963,7 +966,7 @@ worst_fuel <- fuel_conversion_factors |>
   arrange(desc(total_cO2_lbs)) |>
   slice_head(n = 1)
   
-worst_fuel
+gt(worst_fuel)
 ```
 
 * **Worst Fuel Type with Maximum Emissions:** **`r worst_fuel$fuel_name`** is responsible for the vast majority of transit emissions nationwide, producing **`r comma(worst_fuel$total_co2_metric_tons)` metric tons of CO~2~** from **`r comma(round(worst_fuel$total_gallons))` gallons** consumed.
@@ -990,6 +993,7 @@ agency_service <- NTD_SERVICE |>
 ```{r}
 #| code-fold: true
 
+library(scales)
 award_large <- agency_eff |>
   filter(str_starts(size_tier, "Large"))|>
   slice_min(co2_per_pm, n = 1) |>
@@ -1000,7 +1004,7 @@ award_large <- agency_eff |>
   ) |>
   select(NTD_ID, agency_name, state, size_tier, co2_per_pm)
 
-award_large
+gt(award_large)
 
 
 
@@ -1022,7 +1026,7 @@ award_midsmall <- agency_eff |>
     metric_desc = paste0(round(co2_per_upt, 3), " lbs CO2 / trip (", comma(total_upt), " UPT)")
   )
 
-award_midsmall
+gt(award_midsmall)
 
 ```
 
