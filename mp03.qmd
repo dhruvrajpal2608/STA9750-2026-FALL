@@ -1,7 +1,948 @@
 
   ---
-  title: "Mini-Project Placeholder"
+  title: "Where My People At !"
   ---
   
-  This is a placeholder for STA9750 Mini-Project 3. Check back soon for more!
+## **0. Data Acquisition - Census API Key**
+
+```{r}
+#| code-fold: true
+
+tidycensus::census_api_key("8d379a81ef858c6cd32b9ad90292cdc8fa93e490", install=TRUE, overwrite=TRUE)
+
+
+```
   
+## **1. Data Acquisition - CBSA Population Breakdown**
+```{r}
+#| code-fold: true
+library(tidycensus)
+library(dplyr)
+library(sf)
+library(fs)
+  
+
+options(tigris_use_cache = TRUE)
+
+target_dir <- "data/mp03"
+cache_file <- file.path(target_dir, "cbsa_acs_2025.rds")
+
+if(!dir.exists(target_dir)) {
+  dir.create(target_dir, recursive = TRUE)
+}
+
+if (file.exists(cache_file)) {
+  acs_data <- readRDS(cache_file)
+  message("Load ACS data from local cache.")
+} else { 
+  acs_data <- get_acs(
+    geography = "cbsa",
+    variables = c(
+      total_population = "B01003_001",
+      target_population = "B03003_003"
+    ),
+    year = 2025,
+    survey = "acs1",
+    geometry = TRUE,
+    output = "tidy"
+  )
+  
+  saveRDS(acs_data, cache_file)
+  message("Downloaded ACS Data and saved to local cache")
+  
+}
+
+```
+
+```{r}
+#| code-fold: true
+library(gt)
+library(tidyr)
+
+acs <- acs_data |>
+  st_drop_geometry() |>
+  select(GEOID, NAME, variable, estimate, moe) |>
+  head(10) |>
+  pivot_wider(names_from = variable, values_from = estimate)
+
+  gt(acs)
+
+
+
+```
+
+## **2. Data Acquisition - NYC Tract Population Breakdown**
+
+```{r}
+#| code-fold: true
+
+
+options(tigris_use_cache = TRUE)
+
+target_dir <- "data/mp03"
+cache_file <- file.path(target_dir, "tract_acs5_2025.rds")
+
+if(!dir.exists(target_dir)) {
+  dir.create(target_dir, recursive = TRUE)
+}
+
+if (file.exists(cache_file)) {
+  tract_data <- readRDS(cache_file)
+  message("Load Tract-level data from local cache.")
+} else { 
+  tract_data <- get_acs(
+    geography = "tract",
+    variables = c(
+      total_population = "B01003_001",
+      target_population = "B03003_003"
+    ),
+    state = "NY",
+    year = 2024,
+    survey = "acs5",
+    geometry = TRUE,
+    output = "wide"
+  )
+  
+  saveRDS(acs_data, cache_file)
+  message("Downloaded Tract Data and saved to local cache")
+  
+}
+```
+
+## **3. Data Acquisition - NYC NTAs
+
+```{r}
+#| code-fold: true
+
+load_nyc_nta <- function(
+    url="https://s-media.nyc.gov/agencies/dcp/assets/files/zip/data-tools/bytes/neighborhood-tabulation-areas/nynta2020_26c.zip",
+    data_dir = "data/mp03"
+) {
+  if (!dir.exists(data_dir)) {
+    dir.create(data_dir, recursive = TRUE)
+  }
+  zip_file = file.path(data_dir, "nynta2020.zip")
+  unzip_dir = file.path(data_dir, "nynta2020")
+  
+  if (! file.exists(zip_file)) {
+    message("Downloading NYC NTA Shapefile")
+    download.file(url = url, destfile = zip_file, mode = "wb")
+  }
+  if(!dir.exists(unzip_dir) || length(list.files(unzip_dir, pattern = "\\.shp$", recursive = TRUE)) == 0) {
+    message("Unzipping NYC NTA shapefile")
+    unzip(zipfile = zip_file, exdir = unzip_dir)
+  }
+  
+  shp_path <- list.files(
+    path = unzip_dir,
+    pattern = "\\.shp$",
+    full.names = TRUE,
+    recursive = TRUE
+  )[1]
+  
+  if(is.na(shp_path)) {
+    stop("No shp file", unzip_dir)
+  }
+  
+  nta_sf <- st_read(shp_path, quiet=TRUE)
+  
+  nta_clean <- nta_sf |>
+    select(any_of(c(
+      "BoroCode",
+      "BoroName",
+      "CountyFIPS",
+      "NTA2020",
+      "NTAName",
+      "NTAAbb.",
+      "NTAType",
+      "CDTA2020",
+      "CDTAName"
+    )))
+  
+  return(nta_clean)
+}
+
+nta_data <- load_nyc_nta() 
+
+```
+## **4. Aggregate Tract Data to the NTA Level**
+```{r}
+#| code-fold: true
+#| include: false
+
+
+# 1. ALIGN COORDINATE REFERENCE SYSTEMS (CRS)
+
+tract_aligned <- st_transform(tract_data, st_crs(nta_data))
+
+if (!"total_populationE" %in% names(tract_aligned)) {
+  acs_pop <- get_acs(
+    geography = "tract",
+    variables = c(total_population = "B01003_001"),
+    state = "NY",
+    county = c("005", "047", "061", "081", "085"),
+    year = 2024,
+    output = "wide"
+  ) |>
+    select(GEOID, total_populationE)
+
+  tract_aligned <- tract_aligned |>
+    left_join(acs_pop, by = "GEOID")
+}
+
+
+
+tracts_with_nta <- st_join(
+  x       = tract_aligned,
+  y       = nta_data,
+  join    = st_intersects,
+  largest = TRUE
+)
+
+# 3. DROP GEOMETRY & AGGREGATE POPULATIONS TO THE NTA LEVEL
+nta_pop_summary <- tracts_with_nta %>%
+  st_drop_geometry() %>%
+  filter(!is.na(NTA2020)) %>%
+  group_by(NTA2020) %>%
+  summarize(
+    total_pop  = sum(tracts_with_nta$total_populationE, na.rm = TRUE),
+    target_pop = sum(tracts_with_nta$target_populationE, na.rm = TRUE),
+    n_tracts   = n(),
+    .groups    = "drop",
+  ) |>
+  mutate(
+    pct_target_pop = if_else(total_pop > 0, (target_pop/ total_pop) * 100, NA_real_)
+  )
+
+# 4. RECONNECT AGGREGATED ESTIMATES BACK TO ORIGINAL NTA GEOMETRY
+nta_final <- nta_data |>
+  left_join(nta_pop_summary, by = "NTA2020")
+
+
+nta_final |>
+  st_drop_geometry() |>
+  select(BoroName, NTA2020, NTAName, n_tracts, total_pop, pct_target_pop) |>
+  arrange(desc(pct_target_pop)) |>
+  head(10) |>
+  knitr::kable()
+
+
+
+
+
+```
+
+## **5. NYC PLUTO - API Usage**
+
+```{r}
+#| code-fold: true
+
+
+library(httr2)
+library(readr)
+library(dplyr)
+
+download_nyc_pluto <- function(
+  base_url   = "https://data.cityofnewyork.us/resource/64uk-42ks.csv",
+  cache_file = "data/mp03/nyc_pluto.csv",
+  batch_size = 50000,
+  select_cols = NULL
+) {
+  # 1. Check if the data is already available locally and use the cached copy
+  if (file.exists(cache_file)) {
+    message("Loading cached PLUTO data from: ", cache_file)
+    return(read_csv(cache_file, col_select = all_of(select_cols), show_col_types = FALSE))
+  }
+
+  # Ensure the target directory exists
+  cache_dir <- dirname(cache_file)
+  if (!dir.exists(cache_dir)) {
+    dir.create(cache_dir, recursive = TRUE)
+  }
+
+  # 2. Download the PLUTO data in a paginated fashion using $limit and $offset
+  pages  <- list()
+  offset <- 0
+  page_num <- 1
+
+  repeat {
+    message(sprintf("Fetching page %d (offset = %d, limit = %d)...", page_num, offset, batch_size))
+
+    # Build SODA2 request with query parameters
+    # Note: In SODA2, sorting by :id ensures deterministic pagination without skipped/duplicate rows
+    req <- request(base_url) %>%
+      req_url_query(
+        `$limit`  = batch_size,
+        `$offset` = offset,
+        `$order`  = ":id"
+      ) %>%
+      req_retry(max_tries = 3)
+
+    # Optionally restrict columns at the API level to speed up transfer & reduce memory
+    if (!is.null(select_cols)) {
+      req <- req %>%
+        req_url_query(`$select` = paste(select_cols, collapse = ","))
+    }
+
+    resp <- req_perform(req)
+
+    # Parse CSV response cleanly; col_types = cols(.default = "c") prevents type mismatches
+    # across batches before bind_rows() (e.g., a column being all-numeric in page 1 but alphanumeric in page 2)
+    chunk <- resp %>%
+      resp_body_string() %>%
+      read_csv(col_types = cols(.default = "c"), show_col_types = FALSE)
+
+    # Stop immediately if the API returns 0 rows
+    if (nrow(chunk) == 0) {
+      break
+    }
+
+    pages[[page_num]] <- chunk
+
+    # Stop once fewer rows than batch_size are returned (end of dataset reached)
+    if (nrow(chunk) < batch_size) {
+      message("Reached final page (", nrow(chunk), " rows).")
+      break
+    }
+
+    offset   <- offset + batch_size
+    page_num <- page_num + 1
+
+    # Brief pause to query NYC OpenData responsibly
+    Sys.sleep(0.25)
+  }
+
+  # 3. Combine all API responses using dplyr::bind_rows()
+  message("Combining ", length(pages), " pages...")
+  pluto_combined <- bind_rows(pages)
+
+  # 4. Save the combined dataset as a CSV for later use
+  message("Saving combined PLUTO dataset to: ", cache_file)
+  write_csv(pluto_combined, cache_file)
+
+  # Re-read with readr::read_csv() so column types (numeric, character, etc.) are parsed properly
+  return(read_csv(cache_file, col_select = all_of(select_cols), show_col_types = FALSE))
+}
+
+# -------------------------------------------------------------------------
+# EXAMPLE USAGE
+# -------------------------------------------------------------------------
+# Specify only the PLUTO columns needed for spatial/housing analysis
+# (or leave select_cols = NULL to download and cache all ~90 columns)
+needed_cols <- c(
+  "borough", "block", "lot", "bbl",
+  "address", "zipcode", "zonedist1",
+  "bldgclass", "landuse", "lotarea",
+  "bldgarea", "resarea", "officearea",
+  "comarea", "unitsres","unitstotal",
+  "yearbuilt", "assesstot", "numfloors",
+  "latitude", "longitude"
+)
+
+pluto_data <- download_nyc_pluto(
+  cache_file  = "data/mp03/nyc_pluto.csv",
+  batch_size  = 50000,
+  select_cols = needed_cols
+)
+
+```
+
+## **6: Exploratory Data Analysis**
+
+### 1. Which NYC census tract has the most office floor area in NYC?
+
+```{r}
+#| code-fold: true
+
+pluto_office <- readr::read_csv(
+  "data/mp03/nyc_pluto.csv",
+  col_select = c(bbl, borough, address, officearea, latitude, longitude),
+  show_col_types = FALSE
+) |>
+  filter(!is.na(latitude), !is.na(longitude), officearea > 0)
+
+pluto_sf <- st_as_sf(
+  pluto_office,
+  coords = c("longitude", "latitude"),
+  crs = 4326
+) |>
+  st_transform(st_crs(tract_data))
+
+tract_ranking <- st_join(pluto_sf, tract_data, join = st_within) |>
+  st_drop_geometry() |>
+  filter(!is.na(GEOID)) |>
+  group_by(GEOID, NAME) |>
+  summarise(
+    total_office_sqft = sum(officearea, na.rm = TRUE),
+    n_office_lots = n(),
+    .groups = "drop"
+  ) |>
+  arrange(desc(total_office_sqft))
+
+gt(head(tract_ranking, 5))
+
+
+
+
+                                
+```
+New York County (Manhattan) Census Tract 9 (GEOID: 35620), which covers the Midtown East / Grand Central core bounded roughly by 42nd Street, 47th Street, Madison Avenue, and Third Avenue, holds the largest concentration of office floor area in New York City—with roughly 13.43 milllion squarefeet of office space in NYC PLUTO.
+
+### 2. Which NYC NTA has the most residential units (unitsres in PLUTO)?
+```{r}
+#| code-fold: true
+library(readr)
+
+
+pluto_res <- read_csv(
+  "data/mp03/nyc_pluto.csv",
+  col_select = c(bbl, borough, address, unitsres, latitude, longitude),
+  show_col_types = FALSE
+) %>%
+  filter(!is.na(latitude), !is.na(longitude), unitsres > 0)
+
+# 2. Convert PLUTO lots to an sf point layer and align CRS with nta_data
+pluto_sf <- st_as_sf(
+  pluto_res,
+  coords = c("longitude", "latitude"),
+  crs    = 4326
+) %>%
+  st_transform(st_crs(nta_data))
+
+# 3. Spatially join PLUTO lots to NYC NTAs and sum unitsres
+nta_res_ranking <- st_join(pluto_sf, nta_data, join = st_within) %>%
+  st_drop_geometry() %>%
+  filter(!is.na(NTA2020)) %>%
+  group_by(BoroName, NTA2020, NTAName) %>%
+  summarize(
+    total_res_units = sum(unitsres, na.rm = TRUE),
+    n_res_lots      = n(),
+    .groups         = "drop"
+  ) %>%
+  arrange(desc(total_res_units))
+
+# Display the top 10 NYC NTAs by residential units
+gt(head(nta_res_ranking, 5))
+
+
+```
+Upper East Side- Lenox Hill, Roosevelt Island (MN0801) in Manhattan has the highest number of residential units (unitsres in NYC PLUTO) among all 2020 Neighborhood Tabulation Areas, with roughly 55,000+ residential units—closely followed by Upper West Side (Central) (MN0702) and Upper East Side-Yorkville (MN0803).
+
+### 3. Which NYC census tract has the highest population density, measured as population per square foot of residential space? Do your answers change if you measure by population per residential unit?
+
+```{r}
+#| code-fold: true
+
+pluto_housing <- read_csv(
+  "data/mp03/nyc_pluto.csv",
+  col_select = c(bbl, resarea, unitsres, latitude, longitude),
+  show_col_types = FALSE
+) |>
+  filter(!is.na(latitude), !is.na(longitude))
+
+# 2. Spatially join PLUTO lots to NYC Census Tracts
+pluto_sf <- st_as_sf(
+  pluto_housing,
+  coords = c("longitude", "latitude"),
+  crs = 4326
+  ) |>
+  st_transform(st_crs(tract_aligned))
+
+tract_pluto_summary <- pluto_sf |>
+  st_join(
+    tract_aligned |> select(GEOID),
+    join = st_within
+  ) |>
+  st_drop_geometry() |>
+  filter(!is.na(GEOID)) |>
+  group_by(GEOID) |>
+  summarize(
+    total_resarea  = sum(resarea, na.rm = TRUE),
+    total_unitsres = sum(unitsres, na.rm = TRUE),
+    .groups        = "drop"
+  )
+
+# 3. Combine with ACS population and compute both density metrics
+tract_dnst_sf <- tract_aligned |>
+  st_drop_geometry() |>
+  select(GEOID, NAME, total_populationE) |>
+  inner_join(
+    tract_pluto_summary, by = "GEOID") |>
+  # Filter out non-residential / group-quarters outliers (e.g., Rikers Island, parks, dorms)
+  filter(total_unitsres >= 100,
+         total_resarea >= 50000
+         ) |>
+  mutate(
+    pop_per_res_sqft = total_populationE / total_resarea,
+    sqft_per_person  = total_resarea / total_populationE,
+    pop_per_res_unit = total_populationE / total_unitsres
+  )
+
+# Top 5 tracts by population per square foot of residential space
+tract_dnst_sf |>
+  select(GEOID, NAME, total_populationE, total_resarea, total_unitsres, pop_per_res_sqft, sqft_per_person) %>%
+  arrange(desc(pop_per_res_sqft))
+gt(head(tract_dnst_sf, 5))
+
+# Top 5 tracts by population per residential unit
+tract_dnst_sf |>
+  select(GEOID, NAME, total_populationE, total_unitsres, pop_per_res_unit) |>
+  arrange(desc(pop_per_res_unit))
+
+gt(head(tract_dnst_sf, 5))
+
+```
+
+
+### 4. What 5 metro areas, other than NYC, have the largest share of population that identify with your ancestry of interest?
+```{r}
+#| code-fold: true
+
+library(stringr)
+
+top_5_cbsa <- acs |>
+  st_drop_geometry() |>
+  filter(
+    !str_detect(NAME, ", PR"),
+    GEOID != 35620
+  ) |>
+  mutate(
+    pct_target_pop = (target_population / total_population) * 100
+  ) |>
+  arrange(desc(pct_target_pop)) |>
+  select(GEOID, NAME, total_population, target_population, pct_target_pop) |>
+  slice_head(n = 5)
+
+gt(top_5_cbsa)
+
+
+```
+
+
+### 5. At a not-too-granular level, describe the distribution of ancestries in a large non-NYC city of your choosing from the previous question.
+
+```{r}
+#| code-fold: true
+
+wich_falls_ancestry <- get_acs(
+  geography = "cbsa",
+  variables = c(
+    total_pop       = "B01003_001",
+    mexican         = "B03001_004", # Hispanic or Latino: Mexican
+    puerto_rican    = "B03001_005", # Hispanic or Latino: Puerto Rican
+    german          = "B04006_042", # Ancestry: German
+    english         = "B04006_034", # Ancestry: English
+    irish           = "B04006_049", # Ancestry: Irish
+    italian         = "B04006_051", # Ancestry: Italian
+    sub_saharan_afr = "B04006_093"  # Ancestry: Sub-Saharan African
+  ),
+  year   = 2024,
+  survey = "acs5"
+) %>%
+  filter(GEOID == "48660") %>%
+  mutate(
+    total_pop = estimate[variable == "total_pop"],
+    pct_of_metro = round((estimate / total_pop) * 100, 2)
+  ) %>%
+  filter(variable != "total_pop") %>%
+  arrange(desc(estimate))
+
+wich_falls_ancestry <- wich_falls_ancestry %>%
+  select(variable, estimate, moe, pct_of_metro)
+
+gt(wich_falls_ancestry)
+
+```
+Wichita Falls, Texas (GEOID: 48660)—the largest metropolitan area among the top five in the previous question, exhibits a geographic and demographic ancestry distribution shaped by its position,
+
+**Broad Ancestry Breakdown in Wichita-Falls ancestry**
+Rather than an even mix of dozens of distinct diaspora enclaves like New York City, Wichita Falls ancestry profile is heavily concentrated in one dominant heritage group alongside a secondary military- and border-driven mix:
+ 1) Mexican & Mexican-American
+ 2) European (German, English, Irish, Italian)
+ 3) Other Hispanic / Latino (Puerto Rican, Central/South American)
+ 4) African American / Sub-Saharan African & Asian
+
+
+
+### 6. As a percentage of all US residents who identify with your ancestry of interest, how many live in NY and how many live in other major metro areas?
+
+```{r}
+#| code-fold: true
+
+us_total <- get_acs(
+  geography = "us",
+  variables = c(target_population = "B03003_003"),
+  year = 2025,
+  survey = "acs1"
+) |>
+  pull(estimate)
+
+metro_shares <- acs |>
+  st_drop_geometry() |>
+  filter(!str_detect(NAME, ", PR")) |>
+  mutate(
+    pct_us_group = (target_population/ us_total) * 100
+  ) |>
+  arrange(desc(pct_us_group)) |>
+  select(GEOID, NAME, target_population, pct_us_group)
+
+gt(head(metro_shares, 5))
+
+
+```
+
+### 7. Do we observe a roughly linear relationship between population and housing (units or area) across NYC tracts or is the relationship more complex?
+
+```{r}
+#| code-fold: true
+
+library(ggplot2)
+library(scales)
+
+tract_dnst_sf <- readRDS("data/mp03/tract_dnst_sf.rds")
+tract_dnst_sf <- tract_dnst_sf   # if later chunks use this name
+
+
+lm_units <- lm(total_populationE ~ total_unitsres, data = tract_dnst_sf)
+lm_area <- lm(total_populationE ~ total_resarea, data = tract_dnst_sf)
+
+cat("R-squared (Population ~ Residential Units):", round(summary(lm_units)$r.squared, 3), "\n")
+cat("R-squared (Population ~ Residential Sqft):", round(summary(lm_area)$r.squared, 3), "\n")
+
+
+tract_plot <- tract_dnst_sf |>
+  mutate(
+    borough = case_when(
+      substr(GEOID, 1, 5) == "36061" ~ "Manhattan",
+      substr(GEOID, 1, 5) == "36047" ~ "Brooklyn",
+      substr(GEOID, 1, 5) == "36081" ~ "Queens",
+      substr(GEOID, 1, 5) == "36005" ~ "Bronx",
+      substr(GEOID, 1, 5) == "36085" ~ "Staten Island"
+    )
+  )
+
+ggplot(tract_plot, aes(x = total_unitsres, y = total_populationE, color = borough)) +
+  geom_point(alpha = 0.45, size = 1.5) +
+  geom_smooth(method = lm, se = FALSE, linetype = "dashed", color = "black") +
+  geom_smooth(method = "loess", se = FALSE, linewidth = 1) +
+  scale_x_continuous(labels = comma) +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "NYC Census Tracts: Population vs Residential Units",
+    subtitle = "line: Global linear fit; curves: borough specific LOESS trends",
+    x = "PLUTO Residential Units",
+    y = "ACS Total Population",
+    color = "Borough"
+  ) +
+  theme_minimal()
+
+
+```
+
+No—the relationship across NYC Census tracts is not strictly linear. While there is a positive baseline trend (more housing generally corresponds to more residents), the relationship exhibits fan-shaped heteroscedasticity, distinct structural regimes by building typology, and extreme non-linear outliers.
+
+Specifically, population vs. residential units ```r coef(lm_units)``` is closer to linear than population vs. residential floor area ```r coef(lm_area) ```, because the square footage per resident varies dramatically across NYC neighborhoods and income brackets.
+
+R-squared (Population ~ Residential Units): 0.593 
+R-squared (Population ~ Residential Sqft): 0.572
+
+### 8. What are the NTAs with highest buildings?
+```{r}
+#| code-fold: true
+
+
+library(sf)
+library(dplyr)
+library(readr)
+
+# 1. Read numfloors and coordinates from cached PLUTO
+pluto_floors <- read_csv(
+  "data/mp03/nyc_pluto.csv",
+  col_select = c(bbl, borough, address, numfloors, latitude, longitude),
+  show_col_types = FALSE
+) %>%
+  filter(!is.na(latitude), !is.na(longitude), !is.na(numfloors), numfloors > 0)
+
+# 2. Spatially join PLUTO lots to NYC NTAs
+pluto_sf <- st_as_sf(pluto_floors, coords = c("longitude", "latitude"), crs = 4326) %>%
+  st_transform(st_crs(nta_data))
+
+nta_height_ranking <- st_join(pluto_sf, nta_data, join = st_within) %>%
+  st_drop_geometry() %>%
+  filter(!is.na(NTA2020)) %>%
+  group_by(BoroName, NTA2020, NTAName) %>%
+  summarize(
+    max_floors       = max(numfloors, na.rm = TRUE),
+    mean_floors      = round(mean(numfloors, na.rm = TRUE), 2),
+    n_highrise_30plus = sum(numfloors >= 30, na.rm = TRUE),
+    n_buildings      = n(),
+    .groups          = "drop"
+  ) %>%
+  arrange(desc(max_floors), desc(n_highrise_30plus))
+
+# Top 10 NTAs by tallest building (max numfloors)
+gt(head(nta_height_ranking, 10))
+  
+```
+
+
+### 9. Visualize how population density varies across NYC?
+
+```{r}
+#| code-fold: true
+
+library(ggplot2)
+library(units)
+
+
+nta_map <- nta_final %>%
+  mutate(
+    area_sq_miles    = as.numeric(set_units(st_area(geometry), "mi^2")),
+    pop_per_sq_mile  = if_else(total_pop > 0 & area_sq_miles > 0,
+                               total_pop / area_sq_miles,
+                               NA_real_)
+  )
+
+ggplot(nta_map) +
+  geom_sf(aes(fill = pop_per_sq_mile), color = "white", linewidth = 0.15) +
+  scale_fill_viridis_c(
+    option    = "magma",
+    direction = -1,
+    trans     = "sqrt", # Square-root transform prevents extreme Manhattan tracts from washing out outer boroughs
+    labels    = comma,
+    na.value  = "grey90",
+    name      = "Residents /\nSq. Mile"
+  ) +
+  labs(
+    title    = "Population Density Across New York City Neighborhoods (NTAs)",
+    subtitle = "2020–2024 ACS 5-Year Estimates aggregated to 2020 NYC NTAs (parks & airports shaded grey)",
+    caption  = "Source: U.S. Census Bureau ACS-5 & NYC Department of City Planning"
+  ) +
+  theme_void() +
+  theme(
+    plot.title      = element_text(face = "bold", size = 14, margin = margin(b = 4)),
+    plot.subtitle   = element_text(size = 10, color = "grey30", margin = margin(b = 10)),
+    plot.caption    = element_text(size = 8, color = "grey50", margin = margin(t = 8)),
+    legend.position = "right"
+  )
+
+```
+
+#### Borough level Density Distribution
+
+```{r}
+#| code_fold: true
+
+nta_map %>%
+  st_drop_geometry() %>%
+  filter(!is.na(pop_per_sq_mile)) %>%
+  ggplot(aes(x = reorder(BoroName, pop_per_sq_mile, FUN = median), y = pop_per_sq_mile, fill = BoroName)) +
+  geom_boxplot(alpha = 0.7, outlier.shape = NA) +
+  geom_jitter(width = 0.18, alpha = 0.45, size = 1.5, color = "grey20") +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title    = "Distribution of Neighborhood Population Density by Borough",
+    subtitle = "Each point represents one NYC Neighborhood Tabulation Area (NTA)",
+    x        = NULL,
+    y        = "Residents per Square Mile"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    plot.title      = element_text(face = "bold", size = 13)
+  )
+```
+
+### 10. How many New Yorkers live in areas that could be described as ‘primarily commercial’? (This one is particularly open-ended.)
+
+```{r}
+#| code-fold: true
+
+# 1. Load floor area & zoning columns from cached PLUTO
+pluto_comm <- read_csv(
+  "data/mp03/nyc_pluto.csv",
+  col_select = c(bbl, bldgarea, comarea, resarea, zonedist1, landuse, latitude, longitude),
+  show_col_types = FALSE
+) %>%
+  filter(!is.na(latitude), !is.na(longitude), bldgarea > 0)
+
+# 2. Spatially join PLUTO lots to NYC Census Tracts
+pluto_sf <- st_as_sf(pluto_comm, coords = c("longitude", "latitude"), crs = 4326) %>%
+  st_transform(st_crs(tract_data))
+
+tract_comm_metrics <- st_join(pluto_sf, tract_data, join = st_within) %>%
+  st_drop_geometry() %>%
+  filter(!is.na(GEOID)) %>%
+  group_by(GEOID) %>%
+  summarize(
+    total_bldgarea   = sum(bldgarea, na.rm = TRUE),
+    total_comarea    = sum(comarea, na.rm = TRUE),
+    c_zoned_bldgarea = sum(bldgarea[str_starts(zonedist1, "C")], na.rm = TRUE),
+    .groups          = "drop"
+  ) %>%
+  mutate(
+    pct_comm_floorarea = total_comarea / total_bldgarea,
+    pct_c_zoned_area   = c_zoned_bldgarea / total_bldgarea
+  )
+
+# 3. Join back to ACS tract population and compare headcounts across definitions
+tract_comm_analysis <- tract_data %>%
+  st_drop_geometry() %>%
+  inner_join(tract_comm_metrics, by = "GEOID")
+
+summary_table <- tibble(
+  definition = c(
+    "Majority Commercial Floor Area (>50% comarea)",
+    "Strict Commercial Core (>75% comarea)",
+    "Majority Commercial Zoning (>50% C-zoned bldgarea)"
+  ),
+  n_tracts = c(
+    sum(tract_comm_analysis$pct_comm_floorarea > 0.50, na.rm = TRUE),
+    sum(tract_comm_analysis$pct_comm_floorarea > 0.75, na.rm = TRUE),
+    sum(tract_comm_analysis$pct_c_zoned_area > 0.50, na.rm = TRUE)
+  ),
+  total_residents = c(
+    sum(tract_comm_analysis$total_popE[tract_comm_analysis$pct_comm_floorarea > 0.50], na.rm = TRUE),
+    sum(tract_comm_analysis$total_popE[tract_comm_analysis$pct_comm_floorarea > 0.75], na.rm = TRUE),
+    sum(tract_comm_analysis$total_popE[tract_comm_analysis$pct_c_zoned_area > 0.50], na.rm = TRUE)
+  )
+) %>%
+  mutate(
+    pct_of_nyc_pop = round((total_residents / sum(tract_comm_analysis$total_popE, na.rm = TRUE)) * 100, 2)
+  )
+
+print(summary_table)
+
+# 4. Inspect the most populous "primarily commercial" (>50% comarea) Census tracts
+tract_comm_analysis %>%
+  filter(pct_comm_floorarea > 0.50) 
+
+gt(head(tract_comm_analysis, 5))
+
+
+```
+
+## 7. Atlas of Communities Entry
+
+### **Welcomed by the New Colossus: Indian Americans in New York City and Across the United States**
+
+From the spice-scented storefronts of 74th Street in Jackson Heights and the neon glow of Jersey City’s India Square to the tech corridors of Silicon Valley and the Dallas–Fort Worth Metroplex, Indian Americans have become one of the fastest-growing and most geographically dynamic communities in the United States. According to the U.S. Census Bureau’s latest American Community Survey (ACS) estimates, roughly 5.41 million people in the United States identify as Asian Indian alone (up from 5.09 million in 2024 and more than triple the 1.68 million counted in the 2000 Census), making Indian Americans the largest single Asian-origin population in the nation.
+
+Across the Hudson River, the broader New York–Newark–Jersey City metropolitan area contains nearly 792,000 Indian-origin residents—the largest metropolitan Indian population in the Western Hemisphere—extending through Jersey City’s India Square and Middlesex County, New Jersey (where townships like Edison, Iselin, and Plainsboro reach 35% to 45% Asian Indian share).
+
+### National Footprint: Major U.S. Metropolitan Centers
+
+Nationally, the Indian American population is simultaneously bi-coastal and rapidly sub-urbanizing across the Sun Belt. Just four states—California (1.02 million), Texas (708,000), New Jersey (471,000), and New York (420,000) account for nearly half of all Indian Americans nationwide.
+
+### **Maps(Interactive)**
+
+Below are the two maps capturing a different scale of the Indian American story—one zooming into local neighborhood concentration inside New York City, and the other zooming out to national metropolitan scale across the United States.
+
+#### Map: Indian American Population Share Across NYC Neighborhoods (NTAs)
+
+```{r}
+#| code-fold: true
+
+# MAP 1: INDIAN AMERICAN POPULATION SHARE ACROSS NYC NTAs (ACS-5)
+
+nyc_indian_tracts <- get_acs(
+  geography = "tract",
+  variables = c(
+    total_pop  = "B01003_001",
+    indian_pop = "B02015_002" # Asian Indian alone
+  ),
+  state    = "NY",
+  county   = c("New York", "Kings", "Queens", "Bronx", "Richmond"),
+  year     = 2024,
+  survey   = "acs5",
+  geometry = TRUE,
+  output   = "wide"
+) %>%
+  st_transform(st_crs(nta_data))
+
+nta_indian_map <- st_join(nyc_indian_tracts, nta_data, join = st_intersects, largest = TRUE) %>%
+  st_drop_geometry() %>%
+  filter(!is.na(NTA2020)) %>%
+  group_by(NTA2020) %>%
+  summarize(
+    total_pop  = sum(total_popE, na.rm = TRUE),
+    indian_pop = sum(indian_popE, na.rm = TRUE),
+    .groups    = "drop"
+  ) %>%
+  mutate(pct_indian = if_else(total_pop > 0, (indian_pop / total_pop) * 100, NA_real_))
+
+
+library(plotly)
+
+p_nyc <- nta_data %>%
+  left_join(nta_indian_map, by = "NTA2020") %>%
+  ggplot() +
+  geom_sf(
+    aes(
+      fill = pct_indian,
+      text = paste0(NTAName, " (", BoroName, ")<br>Indian Pop: ", comma(indian_pop),
+                    "<br>Share: ", round(pct_indian, 2), "%")
+    ),
+    color = "white",
+    linewidth = 0.15
+  ) +
+  scale_fill_viridis_c(option = "plasma", direction = -1, trans = "sqrt") +
+  labs(
+    title    = "Map 1: Indian American Population Share Across NYC Neighborhoods (NTAs)",
+    subtitle = "Concentrated in Jackson Heights, Richmond Hill, and Eastern Queens (2020–2024 ACS-5)",
+    caption  = "Source: U.S. Census Bureau ACS-5 (Table B02015) & NYC DCP"
+  ) +
+  theme_void()
+
+ggplotly(p_nyc, tooltip = "text")
+
+```
+The above map measures Percentage share, showing where Indian Americans make up the highest proportion of local neighborhood residents across NYC's 2020 Neighborhood Tabulation Areas.
+
+#### Map: Indian American Population Across U.S. Metropolitan Areas (CBSAs)
+```{r}
+#| code-fold: true
+
+
+# MAP 2: INDIAN AMERICAN POPULATION ACROSS U.S. METRO AREAS (CBSA, ACS-1)
+
+cbsa_indian <- get_acs(
+  geography = "cbsa",
+  variables = c(
+    total_pop  = "B01003_001",
+    indian_pop = "B02015_002"
+  ),
+  year     = 2024,
+  survey   = "acs1",
+  geometry = TRUE,
+  output   = "wide"
+) %>%
+  # Filter to contiguous U.S. (exclude AK, HI, PR) for a clean national map
+  filter(!str_detect(NAME, ", AK|, HI|, PR")) %>%
+  st_transform(5070) # NAD83 / Conus Albers Equal Area projection
+
+ggplot(cbsa_indian) +
+  geom_sf(aes(fill = indian_popE), color = "green") +
+  scale_fill_viridis_c(
+    option    = "viridis",
+    direction = -1,
+    trans     = "log10",
+    labels    = comma,
+    name      = "Indian American\nPopulation (Log)"
+  ) +
+  labs(
+    title    = "Map 2: Indian American Population Across U.S. Metropolitan Areas (CBSAs)",
+    subtitle = "Anchored in the NYC–NJ Corridor, Bay Area, Dallas–Fort Worth, Chicago, and D.C. (2024 ACS-1)",
+    caption  = "Source: U.S. Census Bureau 2024 ACS 1-Year Estimates (Table B02015)"
+  ) +
+  theme_void()
+```
+
+The above map measures the Total headcount, showing the absolute size of the Indian American population in every Core Based Statistical Area (metro and micro areas) across the contiguous United States.
+
+
+
+## **AI Usage**
+::: {.callout-note title="AI Usage Statement" collapse="true"}
+Google Gemini was used to help write the code for EDA. Also, generative AI was used to brainstorm Ideas.
+

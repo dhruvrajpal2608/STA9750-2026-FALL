@@ -20,6 +20,7 @@ website:
           - href: mp02.qmd
             text: 'MP02: US Public Transit Systems'
           - href: mp03.qmd
+            text: 'MP03: Where My People At'
           - href: mp04.qmd
             
 format:

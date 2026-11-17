@@ -9,6 +9,7 @@ title:  "US Public Transit Systems (Environmentally Responsible)"
 
 ```{r}
 #| code-fold: true
+#| include: false
 
 
 library(tidyverse)
@@ -93,6 +94,7 @@ EIA_SEP_REPORT <- map2(state.name, state.abb, get_eia_sep) |> list_rbind()
 
 ```{r}
 #| code-fold: true
+#| include: false
 
 library(readxl)
 library(httr2)
@@ -213,18 +215,18 @@ NTD_SERVICE <- load_ntd_service()
 
 ```{r}
 #| code-fold: true
-#| include: false
 
 
 n_modes <- NTD_ENERGY |>
   distinct(Mode)
 
 n_modes
+
+
 ```
 
 ```{r}
 #| code-fold: true
-
 
 NTD_ENERGY <- NTD_ENERGY |>
     mutate(Mode=recode_values(Mode, 
