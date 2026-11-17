@@ -690,12 +690,13 @@ gt(head(nta_height_ranking, 10))
 
 ```{r}
 #| code-fold: true
-
+library(dplyr)
 library(ggplot2)
 library(units)
+library(scales)
 
 
-nta_map <- nta_final %>%
+nta_map <- nta_final |>
   mutate(
     area_sq_miles    = as.numeric(set_units(st_area(geometry), "mi^2")),
     pop_per_sq_mile  = if_else(total_pop > 0 & area_sq_miles > 0,
@@ -710,7 +711,7 @@ ggplot(nta_map) +
     direction = -1,
     trans     = "sqrt", # Square-root transform prevents extreme Manhattan tracts from washing out outer boroughs
     labels    = comma,
-    na.value  = "grey90",
+    na.value  = "green",
     name      = "Residents /\nSq. Mile"
   ) +
   labs(
@@ -721,8 +722,8 @@ ggplot(nta_map) +
   theme_void() +
   theme(
     plot.title      = element_text(face = "bold", size = 14, margin = margin(b = 4)),
-    plot.subtitle   = element_text(size = 10, color = "grey30", margin = margin(b = 10)),
-    plot.caption    = element_text(size = 8, color = "grey50", margin = margin(t = 8)),
+    plot.subtitle   = element_text(size = 10, color = "grey40", margin = margin(b = 10)),
+    plot.caption    = element_text(size = 8, color = "grey70", margin = margin(t = 8)),
     legend.position = "right"
   )
 
@@ -731,14 +732,16 @@ ggplot(nta_map) +
 #### Borough level Density Distribution
 
 ```{r}
-#| code_fold: true
+#| code-fold: true
 
-nta_map %>%
-  st_drop_geometry() %>%
-  filter(!is.na(pop_per_sq_mile)) %>%
+library(ggplot2)
+library(sf)
+nta_map |>
+  st_drop_geometry() |>
+  filter(!is.na(pop_per_sq_mile)) |>
   ggplot(aes(x = reorder(BoroName, pop_per_sq_mile, FUN = median), y = pop_per_sq_mile, fill = BoroName)) +
   geom_boxplot(alpha = 0.7, outlier.shape = NA) +
-  geom_jitter(width = 0.18, alpha = 0.45, size = 1.5, color = "grey20") +
+  geom_jitter(width = 0.18, alpha = 0.45, size = 1.5, color = "green") +
   scale_y_continuous(labels = comma) +
   labs(
     title    = "Distribution of Neighborhood Population Density by Borough",
@@ -746,7 +749,7 @@ nta_map %>%
     x        = NULL,
     y        = "Residents per Square Mile"
   ) +
-  theme_minimal() +
+  theme_classic() +
   theme(
     legend.position = "none",
     plot.title      = element_text(face = "bold", size = 13)
