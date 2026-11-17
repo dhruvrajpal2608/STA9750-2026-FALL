@@ -7,6 +7,7 @@ title: "Where My People At !"
 
 ```{r}
 #| code-fold: true
+#| include: false
 
 tidycensus::census_api_key("8d379a81ef858c6cd32b9ad90292cdc8fa93e490", install=TRUE, overwrite=TRUE)
 
@@ -690,6 +691,8 @@ gt(head(nta_height_ranking, 10))
 
 ```{r}
 #| code-fold: true
+
+
 library(dplyr)
 library(ggplot2)
 library(units)
@@ -699,10 +702,7 @@ library(scales)
 nta_map <- nta_final |>
   mutate(
     area_sq_miles    = as.numeric(set_units(st_area(geometry), "mi^2")),
-    pop_per_sq_mile  = if_else(total_pop > 0 & area_sq_miles > 0,
-                               total_pop / area_sq_miles,
-                               NA_real_)
-  )
+    pop_per_sq_mile  = total_pop / area_sq_miles)
 
 ggplot(nta_map) +
   geom_sf(aes(fill = pop_per_sq_mile), color = "white", linewidth = 0.15) +
@@ -736,12 +736,15 @@ ggplot(nta_map) +
 
 library(ggplot2)
 library(sf)
+library(scales)
+
+
 nta_map |>
   st_drop_geometry() |>
   filter(!is.na(pop_per_sq_mile)) |>
   ggplot(aes(x = reorder(BoroName, pop_per_sq_mile, FUN = median), y = pop_per_sq_mile, fill = BoroName)) +
   geom_boxplot(alpha = 0.7, outlier.shape = NA) +
-  geom_jitter(width = 0.18, alpha = 0.45, size = 1.5, color = "green") +
+  geom_jitter(width = 0.18, alpha = 0.45, size = 1.5, color = "red") +
   scale_y_continuous(labels = comma) +
   labs(
     title    = "Distribution of Neighborhood Population Density by Borough",
@@ -749,7 +752,7 @@ nta_map |>
     x        = NULL,
     y        = "Residents per Square Mile"
   ) +
-  theme_classic() +
+  theme_minimal() +
   theme(
     legend.position = "none",
     plot.title      = element_text(face = "bold", size = 13)
