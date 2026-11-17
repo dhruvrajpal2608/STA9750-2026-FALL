@@ -23,7 +23,7 @@ website:
             text: 'MP03: Where My People At'
           - href: mp04.qmd
             
-format:
+format: 
   html:
     theme: flatly
     toc: true
